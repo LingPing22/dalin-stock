@@ -15,6 +15,7 @@ import {
 import { storageInfo, storageMode } from '../lib/storage.js'
 import { todayKey, dayKey, dateLong, daysBetween } from '../lib/format.js'
 import { Button, Field, TextInput, Segmented, Section } from '../components/ui.jsx'
+import { SecuritySettings } from '../components/SecuritySettings.jsx'
 import { useDialogs } from '../components/Dialogs.jsx'
 
 export default function SettingsPage() {
@@ -115,6 +116,10 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-3xl">
+      <Section title="ລັອກແອັບດ້ວຍ PIN">
+        <SecuritySettings />
+      </Section>
+
       <Section title="ຂໍ້ມູນຮ້ານ">
         <div className="rounded-2xl bg-card border border-line p-4 space-y-4">
           <Field label="ຊື່ຮ້ານ">

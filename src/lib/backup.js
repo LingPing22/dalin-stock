@@ -52,7 +52,7 @@ function toCSV(rows) {
 
 export function movesCSV(state) {
   const byId = new Map(state.batches.map((b) => [b.id, b]))
-  const rows = [['ວັນທີ', 'ເວລາ', 'ປະເພດ', 'ສິນຄ້າ', 'ລັອດ (ວັນຮັບ)', 'ຈຳນວນ', 'ໜ່ວຍ', 'ລາຄາ/ໜ່ວຍ', 'ຍອດເງິນ', 'ຕົ້ນທຶນ', 'ສາເຫດ', 'ໝາຍເຫດ']]
+  const rows = [['ວັນທີ', 'ເວລາ', 'ປະເພດ', 'ສິນຄ້າ', 'ລັອດ (ວັນຮັບ)', 'ຈຳນວນ', 'ໜ່ວຍ', 'ລາຄາ/ໜ່ວຍ', 'ຍອດເງິນ', 'ຕົ້ນທຶນ', 'ສາເຫດ', 'ໝາຍເຫດ', 'ຜູ້ບັນທຶກ']]
   const moves = [...state.moves].sort((a, b) => a.at - b.at)
   for (const m of moves) {
     const b = byId.get(m.batchId)
@@ -70,6 +70,7 @@ export function movesCSV(state) {
       Math.round(m.qty * avgCost(b)),
       m.kind === 'loss' ? lossLabel(m.reason) : '',
       m.note || '',
+      m.by === 'staff' ? 'ພະນັກງານ' : m.by === 'owner' ? 'ເຈົ້າຂອງ' : '',
     ])
   }
   return toCSV(rows)

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { LayoutDashboard, Scale, Package, Wallet, Settings, WifiOff, DatabaseBackup, TriangleAlert, RefreshCw } from 'lucide-react'
+import { LayoutDashboard, Scale, Package, Wallet, Settings, WifiOff, DatabaseBackup, TriangleAlert, RefreshCw, Lock, ShieldAlert } from 'lucide-react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { useAppState, hasDemo, clearDemo, hasSaveError, subscribe } from './lib/store.js'
 import { useRoute, go } from './lib/router.js'
+import { useSecurity, pinEnabled, lockNow } from './lib/security.js'
 import { todayKey, dayKey, dateLong, daysBetween } from './lib/format.js'
 import { Button, cx } from './components/ui.jsx'
 import { useDialogs } from './components/Dialogs.jsx'
@@ -30,8 +31,15 @@ const TITLES = {
 
 export default function App() {
   const state = useAppState()
-  const { page, params } = useRoute()
+  const route = useRoute()
   const online = useOnline()
+  const sec = useSecurity()
+  const staff = sec.role === 'staff'
+  const locking = pinEnabled(sec)
+  // staff can only use the sale screen
+  const page = staff ? 'sell' : route.page
+  const params = route.params
+  const tabs = staff ? TABS.filter((t) => t.page === 'sell') : TABS
 
   const Page = { dashboard: DashboardPage, sell: SellPage, lots: LotsPage, expenses: ExpensesPage, settings: SettingsPage }[page]
 
@@ -49,18 +57,32 @@ export default function App() {
             </span>
           )}
           <span className="hidden md:block text-white/80 text-right whitespace-nowrap">{dateLong(todayKey())}</span>
+          {locking && (
+            <>
+              <span className="rounded-full bg-white/15 px-3 py-1 text-sm font-semibold whitespace-nowrap">{staff ? 'ພະນັກງານ' : 'ເຈົ້າຂອງ'}</span>
+              <button
+                type="button"
+                onClick={lockNow}
+                aria-label="ລັອກແອັບດຽວນີ້"
+                title="ລັອກແອັບດຽວນີ້"
+                className="w-12 h-12 -mr-2 rounded-xl flex items-center justify-center active:bg-white/15"
+              >
+                <Lock size={24} />
+              </button>
+            </>
+          )}
         </div>
       </header>
 
-      <Banners slim={page === 'sell'} />
+      <Banners slim={page === 'sell'} staff={staff} locking={locking} />
 
       <main className={cx('max-w-6xl mx-auto px-4', page === 'sell' ? 'pt-3' : 'pt-5')}>
         <Page params={params} />
       </main>
 
       <nav className="fixed bottom-0 inset-x-0 z-30 bg-card border-t border-line safe-bottom" aria-label="ເມນູຫຼັກ">
-        <div className="max-w-3xl mx-auto grid grid-cols-5">
-          {TABS.map((t) => {
+        <div className={cx('max-w-3xl mx-auto grid', staff ? 'grid-cols-2' : 'grid-cols-5')}>
+          {tabs.map((t) => {
             const active = t.page === page
             const Icon = t.icon
             return (
@@ -80,13 +102,23 @@ export default function App() {
               </button>
             )
           })}
+          {staff && (
+            <button
+              type="button"
+              onClick={lockNow}
+              className="flex flex-col items-center justify-center gap-0.5 min-h-[4.5rem] pt-1 font-semibold text-ink-faint active:bg-line-soft"
+            >
+              <Lock size={26} />
+              <span className="text-[0.85rem] leading-tight">ລັອກ / ປ່ຽນຄົນ</span>
+            </button>
+          )}
         </div>
       </nav>
     </div>
   )
 }
 
-function Banners({ slim }) {
+function Banners({ slim, staff, locking }) {
   const state = useAppState()
   const { confirm, toast } = useDialogs()
   const [saveErr, setSaveErr] = useState(hasSaveError())
@@ -105,7 +137,8 @@ function Banners({ slim }) {
   const hasRealData = state.batches.some((b) => !b.demo)
   const last = state.meta.lastBackupAt
   const daysSinceBackup = last ? daysBetween(dayKey(new Date(last)), todayKey()) : null
-  const needBackup = !demo && hasRealData && (daysSinceBackup == null ? daysBetween(dayKey(new Date(state.meta.createdAt)), todayKey()) >= 3 : daysSinceBackup >= 7)
+  const needPin = !staff && !demo && hasRealData && !locking
+  const needBackup = !staff && !demo && hasRealData && (daysSinceBackup == null ? daysBetween(dayKey(new Date(state.meta.createdAt)), todayKey()) >= 3 : daysSinceBackup >= 7)
 
   const doClearDemo = async () => {
     const ok = await confirm({
@@ -140,6 +173,7 @@ function Banners({ slim }) {
         </Bar>
       )}
       {demo &&
+        !staff &&
         (slim ? (
           <div className="mt-2 flex items-center gap-3 rounded-xl bg-waste-soft px-3 py-1.5">
             <span className="flex-1 text-[0.95rem] font-semibold truncate">ກຳລັງໃຊ້ຂໍ້ມູນຕົວຢ່າງ</span>
@@ -154,6 +188,13 @@ function Banners({ slim }) {
             </Button>
           </Bar>
         ))}
+      {needPin && !slim && (
+        <Bar tone="danger" icon={<ShieldAlert size={24} />} text="ຍັງບໍ່ໄດ້ຕັ້ງ PIN — ໃຜຈັບ iPad ກໍ່ເຫັນຕົ້ນທຶນ ແລະ ກຳໄລໄດ້">
+          <Button size="sm" onClick={() => go('settings')}>
+            ຕັ້ງ PIN
+          </Button>
+        </Bar>
+      )}
       {needBackup && !slim && (
         <Bar
           tone="warn"

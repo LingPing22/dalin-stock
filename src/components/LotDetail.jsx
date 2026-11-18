@@ -173,6 +173,7 @@ export function LotDetail({ batchId, onClose, onEdit }) {
               <span className="num flex-1">
                 {qtyText(m.qty, u.decimals)} {u.short}
                 {m.kind === 'loss' && <span className="ml-2 text-sm font-semibold text-waste">{lossLabel(m.reason)}</span>}
+                {m.by === 'staff' && <span className="ml-2 rounded bg-brand-soft text-brand px-1.5 text-xs font-semibold">ພະນັກງານ</span>}
               </span>
               {m.kind === 'sale' && <span className="num font-bold">{money(m.amount)}</span>}
               <IconButton label="ລຶບລາຍການ" onClick={() => removeMove(m)}>

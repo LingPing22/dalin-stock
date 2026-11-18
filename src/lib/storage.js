@@ -11,6 +11,36 @@ function idb() {
   return idbStore
 }
 
+/** Small extra records (e.g. PIN settings) kept apart from the shop data. */
+export async function loadKey(key) {
+  try {
+    const v = await get(key, idb())
+    if (v !== undefined) return v
+  } catch {
+    /* fall through */
+  }
+  try {
+    const raw = localStorage.getItem(key)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+export async function saveKey(key, value) {
+  try {
+    await set(key, value, idb())
+    return true
+  } catch {
+    try {
+      localStorage.setItem(key, JSON.stringify(value))
+      return true
+    } catch {
+      return false
+    }
+  }
+}
+
 export async function loadData() {
   try {
     const data = await get(KEY, idb())

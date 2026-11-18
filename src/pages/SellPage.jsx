@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Pencil, Trash2, PackagePlus } from 'lucide-react'
 import { useAppState, addMove, deleteMove, restoreMove, getState } from '../lib/store.js'
+import { useRole, pinEnabled } from '../lib/security.js'
 import { lotStats, saleAmount, daySummary } from '../lib/calc.js'
 import { unitOf, LOSS_REASONS, lossLabel } from '../lib/units.js'
 import { money, kip, qtyText, parseNum, r3, timeText, todayKey } from '../lib/format.js'
@@ -13,6 +14,8 @@ const LAST_LOT_KEY = 'dalin-stock:last-lot'
 
 export default function SellPage({ params }) {
   const state = useAppState()
+  const role = useRole()
+  const staff = role === 'staff'
   const { toast, confirm } = useDialogs()
   const openLots = useMemo(
     () => state.batches.filter((b) => !b.closed).sort((a, b) => a.receivedAt.localeCompare(b.receivedAt) || a.createdAt - b.createdAt),
@@ -57,10 +60,16 @@ export default function SellPage({ params }) {
   if (!lot) {
     return (
       <Empty icon={<PackagePlus size={48} />} title="ຍັງບໍ່ມີລັອດທີ່ກຳລັງຂາຍ">
-        <p className="text-ink-soft mb-5">ບັນທຶກການຮັບຂອງເຂົ້າກ່ອນ ແລ້ວຈຶ່ງມາຂາຍໄດ້</p>
-        <Button onClick={() => go('lots', { new: 1 })}>
-          <PackagePlus size={24} /> ຮັບຂອງເຂົ້າລັອດໃໝ່
-        </Button>
+        {staff ? (
+          <p className="text-ink-soft">ໃຫ້ເຈົ້າຂອງຮ້ານບັນທຶກການຮັບຂອງເຂົ້າກ່ອນ</p>
+        ) : (
+          <>
+            <p className="text-ink-soft mb-5">ບັນທຶກການຮັບຂອງເຂົ້າກ່ອນ ແລ້ວຈຶ່ງມາຂາຍໄດ້</p>
+            <Button onClick={() => go('lots', { new: 1 })}>
+              <PackagePlus size={24} /> ຮັບຂອງເຂົ້າລັອດໃໝ່
+            </Button>
+          </>
+        )}
       </Empty>
     )
   }
@@ -100,16 +109,17 @@ export default function SellPage({ params }) {
       if (!ok) return
     }
     const wasRecovered = s.recovered
+    const by = pinEnabled() ? role : undefined
     const m = addMove(
       isSale
-        ? { batchId: lot.id, kind: 'sale', qty, unitPrice: price, amount }
-        : { batchId: lot.id, kind: 'loss', qty, reason },
+        ? { batchId: lot.id, kind: 'sale', qty, unitPrice: price, amount, by }
+        : { batchId: lot.id, kind: 'loss', qty, reason, by },
     )
     const st = getState()
     const after = lotStats(st.batches.find((b) => b.id === lot.id), st.moves, st.expenses)
     const undo = { label: 'ຍົກເລີກ', onClick: () => deleteMove(m.id) }
     const outNote = after.soldOut ? ' — ລັອດນີ້ໝົດແລ້ວ' : ''
-    if (isSale && !wasRecovered && after.recovered) {
+    if (isSale && !staff && !wasRecovered && after.recovered) {
       toast(`${lot.productName} ຄືນທຶນແລ້ວ! ຂາຍຕໍ່ຈາກນີ້ແມ່ນກຳໄລລ້ວນໆ${outNote}`, { tone: 'party', ms: 7000, action: undo })
     } else if (isSale) {
       toast(`ບັນທຶກການຂາຍແລ້ວ ${qtyText(qty, u.decimals)} ${u.short} = ${kip(amount)}${outNote}`, { action: undo, ms: 6000 })
@@ -154,7 +164,7 @@ export default function SellPage({ params }) {
                 )}
               >
                 <div className="flex items-start gap-2">
-                  <span className={cx('mt-2 w-3 h-3 rounded-full shrink-0', st.recovered ? 'bg-gain' : 'bg-loss')} aria-hidden />
+                  {!staff && <span className={cx('mt-2 w-3 h-3 rounded-full shrink-0', st.recovered ? 'bg-gain' : 'bg-loss')} aria-hidden />}
                   <span className="font-bold lg:text-lg leading-snug truncate lg:whitespace-normal lg:line-clamp-2">{b.productName}</span>
                 </div>
                 <div className="num hidden lg:block text-ink-soft mt-1">
@@ -168,7 +178,7 @@ export default function SellPage({ params }) {
           })}
         </div>
         <div className="hidden lg:block">
-          <TodayLog state={state} />
+          <TodayLog state={state} staff={staff} />
         </div>
       </div>
 
@@ -205,11 +215,14 @@ export default function SellPage({ params }) {
                 }}
               />
             ) : (
-              <Window label={`ທຶນ/${u.short}`} value={money(s.avg)} />
+              <Window
+                label={staff ? `ເຫຼືອໃນລັອດ` : `ທຶນ/${u.short}`}
+                value={staff ? qtyText(s.sellable, u.decimals) : money(s.avg)}
+              />
             )}
             <Window
-              label={isSale ? 'ລວມ (ກີບ)' : 'ທຶນທີ່ເສຍ'}
-              value={money(isSale ? amount : lossValue)}
+              label={isSale ? 'ລວມ (ກີບ)' : staff ? 'ເຫຼືອຫຼັງບັນທຶກ' : 'ທຶນທີ່ເສຍ'}
+              value={isSale ? money(amount) : staff ? qtyText(Math.max(0, r3(s.sellable - qty)), u.decimals) : money(lossValue)}
               big
               active={byMoney}
               onClick={canMoney ? () => switchEntry('money') : undefined}
@@ -266,7 +279,7 @@ export default function SellPage({ params }) {
       </div>
 
       <div className="lg:hidden mt-8">
-        <TodayLog state={state} />
+        <TodayLog state={state} staff={staff} />
       </div>
 
       <Sheet
@@ -341,7 +354,7 @@ function Window({ label, value, big, active, highlight, icon, onClick }) {
   )
 }
 
-function TodayLog({ state }) {
+function TodayLog({ state, staff }) {
   const { confirm, toast } = useDialogs()
   const today = todayKey()
   const sum = daySummary(state, today)
@@ -389,6 +402,7 @@ function TodayLog({ state }) {
                     {qtyText(m.qty, u.decimals)} {u.short}
                     {m.kind === 'sale' ? ` × ${money(m.unitPrice)}` : ''}
                     {special && <span className="text-waste"> (ລາຄາພິເສດ)</span>}
+                    {!staff && m.by === 'staff' && <span className="ml-1 rounded bg-brand-soft text-brand px-1.5 text-xs font-semibold">ພະນັກງານ</span>}
                   </span>
                 </span>
                 {m.kind === 'sale' ? (
@@ -396,9 +410,13 @@ function TodayLog({ state }) {
                 ) : (
                   <span className="text-sm font-semibold text-waste bg-waste-soft rounded-lg px-2 py-0.5 whitespace-nowrap">{lossLabel(m.reason)}</span>
                 )}
-                <IconButton label="ລຶບລາຍການ" onClick={() => remove(m, b)}>
-                  <Trash2 size={22} />
-                </IconButton>
+                {staff ? (
+                  <span className="w-3" />
+                ) : (
+                  <IconButton label="ລຶບລາຍການ" onClick={() => remove(m, b)}>
+                    <Trash2 size={22} />
+                  </IconButton>
+                )}
               </li>
             )
           })}

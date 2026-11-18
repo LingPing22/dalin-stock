@@ -189,7 +189,7 @@ export function deleteBatch(id) {
 
 // ───────────── Sales & losses ─────────────
 
-export function addMove({ batchId, kind, qty, unitPrice = 0, amount = 0, reason, note }) {
+export function addMove({ batchId, kind, qty, unitPrice = 0, amount = 0, reason, note, by }) {
   const now = Date.now()
   const m = {
     id: uid(),
@@ -202,6 +202,7 @@ export function addMove({ batchId, kind, qty, unitPrice = 0, amount = 0, reason,
     amount: kind === 'sale' ? Math.round(amount) : 0,
     ...(kind === 'loss' ? { reason: reason || 'other' } : {}),
     note: (note || '').trim(),
+    ...(by ? { by } : {}),
   }
   commit({ ...state, moves: [...state.moves, m] })
   return m
